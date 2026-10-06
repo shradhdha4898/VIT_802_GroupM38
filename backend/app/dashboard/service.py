@@ -4,7 +4,7 @@ from app.models import Payroll_Extract, Flagged_Results, Import_Log
 from app.rules.rules.rule9_dq_score import rule9_dq_score
 
 
-def get_summary(db: Session, pay_period: str, department_filter: str | None = None):
+def get_summary(db: Session, pay_period: str, department_filter: str | None = None, flag_types: set[str] | None = None):
     query = db.query(Payroll_Extract).filter(Payroll_Extract.Pay_Period == pay_period)
     if department_filter:
         query = query.filter(Payroll_Extract.Department == department_filter)
@@ -15,6 +15,8 @@ def get_summary(db: Session, pay_period: str, department_filter: str | None = No
         db.query(Flagged_Results).filter(Flagged_Results.Record_ID.in_(ids)).all()
         if ids else []
     )
+    if flag_types is not None:
+        flags = [f for f in flags if f.Flag_Type in flag_types]
 
     flag_dicts = [{"Record_ID": f.Record_ID} for f in flags]
     dq_score = rule9_dq_score(extract, flag_dicts)

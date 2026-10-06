@@ -6,6 +6,9 @@ from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.dashboard import service
 
+from app.models import Payroll_Extract, Flagged_Results
+from app.access import scope_for, hide_allowance
+
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
@@ -15,11 +18,48 @@ def get_summary(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    # End User role: scope to their department
-    dept_filter = None
-    if current_user["role"] == "End User":
-        dept_filter = current_user.get("department")
-    return service.get_summary(db, payPeriod, dept_filter)
+    dept_filter, flag_types = scope_for(current_user)
+    return service.get_summary(db, payPeriod, dept_filter, flag_types)
+
+
+@router.get("/export")
+def export_rows(
+    payPeriod: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    dept_filter, flag_types = scope_for(current_user)
+    query = db.query(Payroll_Extract).filter(Payroll_Extract.Pay_Period == payPeriod)
+    if dept_filter:
+        query = query.filter(Payroll_Extract.Department == dept_filter)
+    rows = query.all()
+    ids = [r.Record_ID for r in rows]
+    flags = db.query(Flagged_Results).filter(Flagged_Results.Record_ID.in_(ids)).all() if ids else []
+    if flag_types is not None:
+        flags = [f for f in flags if f.Flag_Type in flag_types]
+    if hide_allowance(current_user.get("role")):
+        flags = [f for f in flags if f.Flag_Type != "ALLOWANCE_MISSING_AMOUNT"]
+    by_record = {}
+    for f in flags:
+        by_record.setdefault(f.Record_ID, []).append(f)
+    out = []
+    for r in rows:
+        linked = by_record.get(r.Record_ID, [])
+        if not linked and flag_types is not None:
+            continue
+        out.append({
+            "Employee ID": r.Employee_ID,
+            "Department": r.Department,
+            "Cost Centre": r.Cost_Centre or "",
+            "Pay Period": r.Pay_Period,
+            "Pay Type": r.Pay_Type,
+            "Hours Worked": str(r.Hours_Worked) if r.Hours_Worked is not None else "",
+            "Pay Amount": str(r.Pay_Amount) if r.Pay_Amount is not None else "",
+            "Issue": "; ".join(f.Flag_Type.replace("_", " ").title() for f in linked),
+            "Severity": "; ".join(f.Severity for f in linked),
+            "Issue Detail": "; ".join(f.Description for f in linked),
+        })
+    return out
 
 
 @router.get("/summary/department")
