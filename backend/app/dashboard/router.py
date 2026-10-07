@@ -19,7 +19,8 @@ def get_summary(
     current_user: dict = Depends(get_current_user),
 ):
     dept_filter, flag_types = scope_for(current_user)
-    return service.get_summary(db, payPeriod, dept_filter, flag_types)
+    exclude = {"ALLOWANCE_MISSING_AMOUNT"} if hide_allowance(current_user.get("role")) else None
+    return service.get_summary(db, payPeriod, dept_filter, flag_types, exclude)
 
 
 @router.get("/export")
@@ -45,21 +46,34 @@ def export_rows(
     out = []
     for r in rows:
         linked = by_record.get(r.Record_ID, [])
-        if not linked and flag_types is not None:
+        if flag_types is not None and not linked:
             continue
-        out.append({
-            "Employee ID": r.Employee_ID,
-            "Department": r.Department,
-            "Cost Centre": r.Cost_Centre or "",
-            "Pay Period": r.Pay_Period,
-            "Pay Type": r.Pay_Type,
-            "Hours Worked": str(r.Hours_Worked) if r.Hours_Worked is not None else "",
-            "Pay Amount": str(r.Pay_Amount) if r.Pay_Amount is not None else "",
-            "Issue": "; ".join(f.Flag_Type.replace("_", " ").title() for f in linked),
-            "Severity": "; ".join(f.Severity for f in linked),
-            "Issue Detail": "; ".join(f.Description for f in linked),
-        })
+        if not linked:
+            continue
+        for f in linked:
+            out.append({
+                "Flag ID": f.Flag_ID,
+                "Record ID": r.Record_ID,
+                "Employee ID": r.Employee_ID,
+                "Department": r.Department,
+                "Cost Centre": r.Cost_Centre or "",
+                "Pay Period": r.Pay_Period,
+                "Pay Type": r.Pay_Type,
+                "Hours Worked": str(r.Hours_Worked) if r.Hours_Worked is not None else "",
+                "Pay Amount": str(r.Pay_Amount) if r.Pay_Amount is not None else "",
+                "Source": r.Source,
+                "Flag Type": f.Flag_Type,
+                "Severity": f.Severity,
+                "Description": f.Description,
+            })
     return out
+
+
+@router.get("/latest-month")
+def latest_month(db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+    from app.models import Import_Log
+    row = db.query(Import_Log).order_by(Import_Log.Imported_At.desc()).first()
+    return {"payPeriod": row.Import_Month if row else "2020-01"}
 
 
 @router.get("/summary/department")

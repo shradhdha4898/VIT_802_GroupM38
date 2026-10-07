@@ -23,16 +23,6 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    label: 'Power BI Analytics',
-    href: '/powerbi',
-    allowedRoles: 'all',
-    icon: (
-      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path d="M21.21 15.89A10 10 0 118 2.83" /><path d="M22 12A10 10 0 0012 2v10z" />
-      </svg>
-    ),
-  },
-  {
     label: 'Import Attendance',
     href: '/upload',
     allowedRoles: ['Admin', 'Payroll Manager'],
@@ -83,6 +73,16 @@ const NAV_ITEMS: NavItem[] = [
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
         <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Power BI Analytics',
+    href: '/powerbi',
+    allowedRoles: 'all',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path d="M21.21 15.89A10 10 0 118 2.83" /><path d="M22 12A10 10 0 0012 2v10z" />
       </svg>
     ),
   },
