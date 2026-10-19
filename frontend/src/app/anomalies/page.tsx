@@ -33,6 +33,7 @@ export default function AnomaliesPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
+  const [monthInput, setMonthInput] = useState('');
   const [payPeriod, setPayPeriod] = useState('');
   const [focused, setFocused] = useState(false);
   const [data, setData] = useState<FlaggedRecord[] | null>(null);
@@ -44,19 +45,31 @@ export default function AnomaliesPage() {
     if (!ALLOWED_ROLES.includes(getRole() ?? '')) { router.push('/dashboard'); return; }
     setAuthorized(true);
     api.get<{ payPeriod: string }>('/dashboard/latest-month')
-      .then((r) => setPayPeriod(r.payPeriod))
-      .catch(() => setPayPeriod('2020-01'));
+      .then((r) => {
+        const period = r.payPeriod || '2020-01';
+        setMonthInput(period);
+        setPayPeriod(period);
+        load(period);
+      })
+      .catch(() => {
+        setMonthInput('2020-01');
+        setPayPeriod('2020-01');
+        load('2020-01');
+      });
   }, [router]);
 
-  useEffect(() => {
-    if (authorized && payPeriod) load();
-  }, [authorized, payPeriod]);
-
-  const load = async () => {
+  const load = async (periodArg?: string) => {
+    const raw = typeof periodArg === 'string' ? periodArg : monthInput;
+    const period = String(raw ?? '').trim();
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      setError('Enter the month as YYYY-MM, then click Load.');
+      return;
+    }
+    setPayPeriod(period);
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<FlaggedRecord[]>(`/rules/flags?payPeriod=${payPeriod}`);
+      const res = await api.get<FlaggedRecord[]>(`/rules/flags?payPeriod=${period}`);
       setData(res);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load flags');
@@ -90,8 +103,8 @@ export default function AnomaliesPage() {
             </div>
             <div style={styles.headingActions}>
               <div style={styles.periodRow}>
-                <input style={styles.periodInput} type="text" value={payPeriod} onChange={(e) => setPayPeriod(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={focused || payPeriod ? '' : 'YYYY-MM'} />
-                <button style={styles.loadBtn} onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Load Flags'}</button>
+                <input style={styles.periodInput} type="text" value={monthInput} onChange={(e) => setMonthInput(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={focused || monthInput ? '' : 'YYYY-MM'} />
+                <button style={styles.loadBtn} onClick={() => load()} disabled={loading}>{loading ? 'Loading…' : 'Load Flags'}</button>
                 <button style={styles.exportBtn} onClick={handleExport}>Export Report</button>
               </div>
             </div>

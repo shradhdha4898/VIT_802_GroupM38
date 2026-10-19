@@ -38,6 +38,7 @@ export default function LoginPage() {
       <div style={styles.card}>
         <h1 style={styles.title}>Payroll Dashboard</h1>
         <p style={styles.subtitle}>SecureLock Global — Internal System</p>
+        {error && <div style={styles.errorBanner}>{error}</div>}
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
             <label style={styles.label}>Username</label>
@@ -64,7 +65,6 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
           </div>
-          {error && <p style={styles.error}>{error}</p>}
           <button style={styles.button} type="submit" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
@@ -124,14 +124,15 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
     transition: 'border-color 0.2s',
   },
-  error: {
-    margin: 0,
-    padding: '10px 14px',
-    background: '#fff0f0',
-    border: '1px solid #ffcccc',
+  errorBanner: {
+    margin: '0 0 20px',
+    padding: '12px 14px',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
     borderRadius: 8,
-    color: '#c0392b',
+    color: '#b91c1c',
     fontSize: 13,
+    fontWeight: 600,
   },
   button: {
     padding: '12px',

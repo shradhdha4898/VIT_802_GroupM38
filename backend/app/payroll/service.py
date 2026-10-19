@@ -25,7 +25,18 @@ def calculate_payroll(db: Session, pay_period: str):
     rates = db.query(Employee_Pay_Rate).filter(Employee_Pay_Rate.Employee_ID.in_(emp_ids)).all()
     rate_map = {r.Employee_ID: r.Hourly_Rate for r in rates}
 
-    # Delete existing Generated rows for this period (idempotent)
+    # Delete flags first. Flagged_Results has a foreign key to Payroll_Extract,
+    # so a re-import fails if the old flags are still pointing at these rows.
+    old_ids = [
+        r.Record_ID
+        for r in db.query(Payroll_Extract.Record_ID).filter(
+            Payroll_Extract.Pay_Period == pay_period,
+            Payroll_Extract.Source == "Generated",
+        ).all()
+    ]
+    if old_ids:
+        db.query(Flagged_Results).filter(Flagged_Results.Record_ID.in_(old_ids)).delete(synchronize_session=False)
+
     db.query(Payroll_Extract).filter(
         Payroll_Extract.Pay_Period == pay_period,
         Payroll_Extract.Source == "Generated",

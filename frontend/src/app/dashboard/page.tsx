@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
+  const [monthInput, setMonthInput] = useState('');
   const [payPeriod, setPayPeriod] = useState('');
   const [focused, setFocused] = useState(false);
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -57,19 +58,31 @@ export default function DashboardPage() {
     if (!isAuthenticated()) { router.push('/login'); return; }
     setAuthorized(true);
     api.get<{ payPeriod: string }>('/dashboard/latest-month')
-      .then((r) => setPayPeriod(r.payPeriod))
-      .catch(() => setPayPeriod('2020-01'));
+      .then((r) => {
+        const period = r.payPeriod || '2020-01';
+        setMonthInput(period);
+        setPayPeriod(period);
+        load(period);
+      })
+      .catch(() => {
+        setMonthInput('2020-01');
+        setPayPeriod('2020-01');
+        load('2020-01');
+      });
   }, [router]);
 
-  useEffect(() => {
-    if (authorized && payPeriod) load();
-  }, [authorized, payPeriod]);
-
-  const load = async () => {
+  const load = async (periodArg?: string) => {
+    const raw = typeof periodArg === 'string' ? periodArg : monthInput;
+    const period = String(raw ?? '').trim();
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      setError('Enter the month as YYYY-MM, then click Load.');
+      return;
+    }
+    setPayPeriod(period);
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<DashboardSummary>(`/dashboard/summary?payPeriod=${payPeriod}`);
+      const res = await api.get<DashboardSummary>(`/dashboard/summary?payPeriod=${period}`);
       setData(res);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -108,8 +121,8 @@ export default function DashboardPage() {
             </div>
             <div style={styles.headingActions}>
               <div style={styles.periodRow}>
-                <input style={styles.periodInput} type="text" value={payPeriod} onChange={(e) => setPayPeriod(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={focused || payPeriod ? '' : 'YYYY-MM'} />
-                <button style={styles.loadBtn} onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Load Report'}</button>
+                <input style={styles.periodInput} type="text" value={monthInput} onChange={(e) => setMonthInput(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={focused || monthInput ? '' : 'YYYY-MM'} />
+                <button style={styles.loadBtn} onClick={() => load()} disabled={loading}>{loading ? 'Loading…' : 'Load Report'}</button>
                 <button style={styles.exportBtn} onClick={handleExport} disabled={!data}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ marginRight: 6 }}>
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />

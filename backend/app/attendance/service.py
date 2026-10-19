@@ -26,7 +26,22 @@ def _parse_time(value: str) -> time | None:
 
 
 def upload_attendance(db: Session, file_bytes: bytes, filename: str, import_month: str):
-    text = file_bytes.decode("utf-8-sig")
+    # D2: reject anything that is not a .csv before reading or deleting
+    name = (filename or "").strip().lower()
+    if not name.endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .csv files are accepted",
+        )
+
+    try:
+        text = file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is not valid CSV text",
+        )
+
     reader = csv.DictReader(io.StringIO(text))
     records = list(reader)
 
@@ -41,49 +56,71 @@ def upload_attendance(db: Session, file_bytes: bytes, filename: str, import_mont
                 detail=f"CSV missing required column: {col}",
             )
 
-    # Idempotent: delete existing rows for this month
-    db.query(Attendance_History).filter(Attendance_History.Import_Month == import_month).delete()
-    db.commit()
-
-    rows = []
-    for r in records:
+    # D5: validate every row before touching the stored month
+    prepared = []
+    for index, r in enumerate(records, start=2):
         punch_in = _parse_time(r.get("Punch_In", ""))
         if punch_in is None:
             punch_in = time(0, 0, 0)
 
         punch_out = _parse_time(r.get("Punch_Out", ""))
 
+        raw_date = (r.get("Punch_Date") or "").strip()
         try:
-            punch_date = date.fromisoformat(r["Punch_Date"].strip())
-        except (ValueError, KeyError):
+            punch_date = date.fromisoformat(raw_date)
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid Punch_Date format: {r.get('Punch_Date')}",
+                detail=f"Invalid Punch_Date format on row {index}: {r.get('Punch_Date')}",
             )
 
-        rows.append(Attendance_History(
-            Employee_ID=r["Employee_ID"].strip(),
-            Punch_Date=punch_date,
-            Punch_In=punch_in,
-            Punch_Out=punch_out,
-            Department=r["Department"].strip(),
-            Cost_Centre=r["Cost_Centre"].strip(),
-            Source_File=filename,
+        prepared.append({
+            "Employee_ID": (r.get("Employee_ID") or "").strip(),
+            "Punch_Date": punch_date,
+            "Punch_In": punch_in,
+            "Punch_Out": punch_out,
+            "Department": (r.get("Department") or "").strip(),
+            "Cost_Centre": (r.get("Cost_Centre") or "").strip(),
+        })
+
+    # File is valid. Replace the month in one transaction.
+    try:
+        db.query(Attendance_History).filter(Attendance_History.Import_Month == import_month).delete()
+
+        rows = [
+            Attendance_History(
+                Employee_ID=item["Employee_ID"],
+                Punch_Date=item["Punch_Date"],
+                Punch_In=item["Punch_In"],
+                Punch_Out=item["Punch_Out"],
+                Department=item["Department"],
+                Cost_Centre=item["Cost_Centre"],
+                Source_File=filename,
+                Import_Month=import_month,
+            )
+            for item in prepared
+        ]
+        db.bulk_save_objects(rows)
+
+        log = Import_Log(
             Import_Month=import_month,
-        ))
+            Source_File=filename,
+            Row_Count=len(prepared),
+            Imported_At=datetime.utcnow(),
+        )
+        db.add(log)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Upload failed and the existing month was left unchanged",
+        )
 
-    db.bulk_save_objects(rows)
-
-    log = Import_Log(
-        Import_Month=import_month,
-        Source_File=filename,
-        Row_Count=len(records),
-        Imported_At=datetime.utcnow(),
-    )
-    db.add(log)
-    db.commit()
-
-    return {"inserted": len(records), "importMonth": import_month}
+    return {"inserted": len(prepared), "importMonth": import_month}
 
 
 def get_history(db: Session, import_month: str):
