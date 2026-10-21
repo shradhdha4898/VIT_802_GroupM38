@@ -22,6 +22,7 @@ interface DashboardSummary {
   dqScore: number;
   flagBreakdown: Record<string, number>;
   severityBreakdown: Record<string, number>;
+  departmentBreakdown?: Record<string, number>;
   lastImport: { Import_Month: string; Source_File: string; Row_Count: number; Imported_At: string } | null;
 }
 
@@ -103,8 +104,9 @@ export default function DashboardPage() {
 
   if (!authorized) return null;
 
-  const barData = data ? Object.entries(data.flagBreakdown).map(([name, value]) => ({ name: name.replace(/_/g, ' ').slice(0, 14), value })) : [];
+  const barData = data ? Object.entries(data.flagBreakdown).map(([name, value]) => ({ name: name.replace(/_/g, ' ').slice(0, 18), fullName: name.replace(/_/g, ' '), value })).sort((a, b) => b.value - a.value) : [];
   const pieData = data ? Object.entries(data.severityBreakdown).map(([name, value]) => ({ name, value })) : [];
+  const deptData = data ? Object.entries(data.departmentBreakdown ?? {}).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) : [];
   const cleanRecords = data ? data.totalExtractRows - data.flaggedRows : 0;
 
   return (
@@ -144,7 +146,20 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {data && (
+          {data && data.totalExtractRows === 0 && (
+            <div style={styles.noDataCard}>
+              <div style={styles.noDataIcon}>
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#64748b" strokeWidth={1.8}>
+                  <path d="M9 17v-6m3 6V7m3 10v-3" />
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                </svg>
+              </div>
+              <h2 style={styles.noDataTitle}>No data found</h2>
+              <p style={styles.noDataText}>There are no payroll records for {data.payPeriod}. Import attendance for this month, then load the report again.</p>
+            </div>
+          )}
+
+          {data && data.totalExtractRows > 0 && (
             <>
               {/* KPI Cards */}
               <div style={styles.kpiGrid}>
@@ -184,7 +199,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Charts */}
-              {(barData.length > 0 || pieData.length > 0) && (
+              {(barData.length > 0 || deptData.length > 0) && (
                 <div style={styles.chartsGrid}>
                   {barData.length > 0 && (
                     <div style={styles.chartCard}>
@@ -200,6 +215,25 @@ export default function DashboardPage() {
                       </ResponsiveContainer>
                     </div>
                   )}
+                  {deptData.length > 0 && (
+                    <div style={styles.chartCard}>
+                      <h3 style={styles.chartTitle}>Flags by Department</h3>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={deptData} margin={{ top: 8, right: 8, left: -16, bottom: 40 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} angle={-25} textAnchor="end" interval={0} />
+                          <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                          <Bar dataKey="value" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(pieData.length > 0 || Object.keys(data.flagBreakdown).length > 0) && (
+                <div style={styles.chartsGrid}>
                   {pieData.length > 0 && (
                     <div style={styles.chartCard}>
                       <h3 style={styles.chartTitle}>Severity Distribution</h3>
@@ -214,31 +248,29 @@ export default function DashboardPage() {
                       </ResponsiveContainer>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Flag table */}
-              {Object.keys(data.flagBreakdown).length > 0 && (
-                <div style={styles.tableCard}>
-                  <h3 style={styles.chartTitle}>Flag Details</h3>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={styles.th}>Flag Type</th>
-                        <th style={styles.th}>Count</th>
-                        <th style={styles.th}>Rule</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(data.flagBreakdown).map(([type, count]) => (
-                        <tr key={type}>
-                          <td style={styles.td}><span style={styles.flagTag}>{type.replace(/_/g, ' ')}</span></td>
-                          <td style={{ ...styles.td, fontWeight: 600 }}>{count}</td>
-                          <td style={{ ...styles.td, color: '#64748b' }}>{FLAG_RULE_MAP[type] ?? '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {Object.keys(data.flagBreakdown).length > 0 && (
+                    <div style={styles.chartCard}>
+                      <h3 style={styles.chartTitle}>Flag Details</h3>
+                      <table style={styles.table}>
+                        <thead>
+                          <tr>
+                            <th style={styles.th}>Flag Type</th>
+                            <th style={styles.th}>Count</th>
+                            <th style={styles.th}>Rule</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(data.flagBreakdown).map(([type, count]) => (
+                            <tr key={type}>
+                              <td style={styles.td}><span style={styles.flagTag}>{type.replace(/_/g, ' ')}</span></td>
+                              <td style={{ ...styles.td, fontWeight: 600 }}>{count}</td>
+                              <td style={{ ...styles.td, color: '#64748b' }}>{FLAG_RULE_MAP[type] ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -322,5 +354,9 @@ const styles: Record<string, React.CSSProperties> = {
   td: { padding: '11px 14px', borderBottom: '1px solid #f8fafc', color: '#374151' },
   flagTag: { display: 'inline-block', background: '#fef2f2', color: '#dc2626', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 600 },
   emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
+  noDataCard: { background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 6px rgba(0,0,0,0.04)', padding: '56px 32px', textAlign: 'center', maxWidth: 560, margin: '24px auto' },
+  noDataIcon: { width: 64, height: 64, borderRadius: 16, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' },
+  noDataTitle: { margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f172a' },
+  noDataText: { margin: 0, fontSize: 14, lineHeight: 1.6, color: '#64748b' },
   emptyText: { color: '#94a3b8', fontSize: 14 },
 };

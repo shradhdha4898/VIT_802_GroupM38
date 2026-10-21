@@ -23,11 +23,15 @@ def get_summary(db: Session, pay_period: str, department_filter: str | None = No
     flag_dicts = [{"Record_ID": f.Record_ID} for f in flags]
     dq_score = rule9_dq_score(extract, flag_dicts)
 
+    extract_dept = {r.Record_ID: (r.Department or "Unknown") for r in extract}
     flag_breakdown: dict[str, int] = {}
     severity_breakdown: dict[str, int] = {}
+    department_breakdown: dict[str, int] = {}
     for f in flags:
         flag_breakdown[f.Flag_Type] = flag_breakdown.get(f.Flag_Type, 0) + 1
         severity_breakdown[f.Severity] = severity_breakdown.get(f.Severity, 0) + 1
+        dept = extract_dept.get(f.Record_ID, "Unknown")
+        department_breakdown[dept] = department_breakdown.get(dept, 0) + 1
 
     unique_emps = len({r.Employee_ID for r in extract})
     total_pay = sum(float(r.Pay_Amount) for r in extract if r.Pay_Amount is not None)
@@ -49,5 +53,6 @@ def get_summary(db: Session, pay_period: str, department_filter: str | None = No
         "dqScore": dq_score,
         "flagBreakdown": flag_breakdown,
         "severityBreakdown": severity_breakdown,
+        "departmentBreakdown": department_breakdown,
         "lastImport": last_import,
     }
