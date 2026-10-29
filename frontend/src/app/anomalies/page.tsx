@@ -37,6 +37,7 @@ export default function AnomaliesPage() {
   const [payPeriod, setPayPeriod] = useState('');
   const [focused, setFocused] = useState(false);
   const [data, setData] = useState<FlaggedRecord[] | null>(null);
+  const [totalRows, setTotalRows] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -70,7 +71,9 @@ export default function AnomaliesPage() {
     setError('');
     try {
       const res = await api.get<FlaggedRecord[]>(`/rules/flags?payPeriod=${period}`);
+      const score = await api.get<{ totalRows: number }>(`/rules/dq-score?payPeriod=${period}`);
       setData(res);
+      setTotalRows(score.totalRows);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load flags');
     } finally {
@@ -112,7 +115,20 @@ export default function AnomaliesPage() {
 
           {error && <div style={styles.errorBox}>{error}</div>}
 
-          {data && (
+          {data && totalRows === 0 && (
+            <div style={styles.noDataCard}>
+              <div style={styles.noDataIcon}>
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#64748b" strokeWidth={1.8}>
+                  <path d="M9 17v-6m3 6V7m3 10v-3" />
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                </svg>
+              </div>
+              <h2 style={styles.noDataTitle}>No data found</h2>
+              <p style={styles.noDataText}>There are no payroll records for {payPeriod}. Import attendance for this month, then load the report again.</p>
+            </div>
+          )}
+
+          {data && totalRows !== null && totalRows > 0 && (
             <>
               {/* Summary pills */}
               <div style={styles.summaryRow}>
@@ -207,4 +223,8 @@ const styles: Record<string, React.CSSProperties> = {
   sevError: { background: '#fef2f2', color: '#dc2626' },
   sevWarn: { background: '#fffbeb', color: '#d97706' },
   emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 60, gap: 12 },
+  noDataCard: { background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 6px rgba(0,0,0,0.04)', padding: '56px 32px', textAlign: 'center', maxWidth: 560, margin: '24px auto' },
+  noDataIcon: { width: 64, height: 64, borderRadius: 16, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' },
+  noDataTitle: { margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f172a' },
+  noDataText: { margin: 0, fontSize: 14, lineHeight: 1.6, color: '#64748b' },
 };

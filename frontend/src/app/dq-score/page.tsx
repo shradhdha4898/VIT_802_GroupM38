@@ -109,7 +109,20 @@ export default function DqScorePage() {
 
           {error && <div style={styles.errorBox}>{error}</div>}
 
-          {data && (
+          {data && data.totalRows === 0 && (
+            <div style={styles.noDataCard}>
+              <div style={styles.noDataIcon}>
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#64748b" strokeWidth={1.8}>
+                  <path d="M9 17v-6m3 6V7m3 10v-3" />
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                </svg>
+              </div>
+              <h2 style={styles.noDataTitle}>No data found</h2>
+              <p style={styles.noDataText}>There are no payroll records for {data.payPeriod}. Import attendance for this month, then load the report again.</p>
+            </div>
+          )}
+
+          {data && data.totalRows > 0 && (
             <>
               {/* Score hero card */}
               <div style={{ ...styles.heroCard, background: dqBg(data.dqScore), borderColor: dqColor(data.dqScore) }}>
@@ -193,4 +206,8 @@ const styles: Record<string, React.CSSProperties> = {
   statLabel: { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 12 },
   statBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 80, gap: 12 },
+  noDataCard: { background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 6px rgba(0,0,0,0.04)', padding: '56px 32px', textAlign: 'center', maxWidth: 560, margin: '24px auto' },
+  noDataIcon: { width: 64, height: 64, borderRadius: 16, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' },
+  noDataTitle: { margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f172a' },
+  noDataText: { margin: 0, fontSize: 14, lineHeight: 1.6, color: '#64748b' },
 };
